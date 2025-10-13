@@ -1,0 +1,37 @@
+# Configuration for training a REINFORCE speaker on Colors in Context
+# Note: Literal listeners (L0) are automatically trained if not found
+# Colors dataset must be downloaded manually from Monroe et al., 2017
+
+# Dataset configuration
+dataset:
+  name: colors
+  # Colors dataset is pre-generated; no generation params needed
+
+# Training configuration
+training:
+  model_type: amortized
+  batch_size: 32
+  epochs: 100
+  learning_rate: null
+  cuda: true
+  debug: false
+  
+  # REINFORCE speaker specific
+  activation: multinomial  # policy gradient sampling
+  penalty: length
+  lmbd: 0.01
+  tau: 1.0
+  seed: 42
+  
+  # Literal listener (L0) pretraining config
+  l0_epochs: 100
+  l0_learning_rate: 0.0001
+  l0_batch_size: 32
+
+# Model architecture
+model:
+  embedding_dim: 256
+  hidden_size: 256
+  vision_model: Conv4
+  max_sequence_length: 10
+

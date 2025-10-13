@@ -1,0 +1,25 @@
+# Configuration for training a literal speaker (S0) on Colors in Context
+# Colors dataset must be downloaded manually from Monroe et al., 2017
+
+# Dataset configuration
+dataset:
+  name: colors
+  # Colors dataset is pre-generated; no generation params needed
+
+# Training configuration
+training:
+  model_type: s0
+  batch_size: 32
+  epochs: 100
+  learning_rate: 0.001
+  cuda: true
+  debug: false
+  seed: 42
+
+# Model architecture
+model:
+  embedding_dim: 256
+  hidden_size: 256
+  vision_model: Conv4
+  max_sequence_length: 10
+

@@ -1,0 +1,25 @@
+# Configuration for training a literal speaker (S0) on ShapeWorld
+
+dataset:
+  name: shapeworld
+  n_examples: 1000
+  n_images: 3
+  data_type: reference
+  img_type: single
+  generalization: null
+
+training:
+  model_type: s0
+  batch_size: 32
+  epochs: 100
+  learning_rate: 0.001
+  cuda: true
+  debug: false
+  seed: 42
+
+model:
+  embedding_dim: 256
+  hidden_size: 256
+  vision_model: Conv4
+  max_sequence_length: 10
+

@@ -1,0 +1,43 @@
+# Configuration for training an amortized speaker on ShapeWorld
+# Note: Literal listeners (L0) are automatically trained if not found
+
+# Dataset configuration
+dataset:
+  name: shapeworld
+  n_examples: 1000
+  n_images: 3
+  data_type: reference
+  img_type: single
+  generalization: null  # or: new_color, new_shape, new_combo
+
+# Training configuration
+training:
+  model_type: amortized
+  batch_size: 32
+  epochs: 100
+  learning_rate: null  # auto-set based on model type (0.001 for S0, 0.0001 for L0)
+  cuda: true
+  debug: false
+  
+  # Amortized speaker specific
+  activation: gumbel  # gumbel, softmax, multinomial
+  penalty: length
+  lmbd: 0.01  # length penalty weight
+  tau: 1.0    # temperature for Gumbel-Softmax
+  
+  # Random seed for reproducibility
+  seed: 42
+  
+  # Literal listener (L0) pretraining config
+  # These are used if L0 models need to be trained first
+  l0_epochs: 100
+  l0_learning_rate: 0.0001
+  l0_batch_size: 32
+
+# Model architecture (applies to both L0 and amortized speaker)
+model:
+  embedding_dim: 256
+  hidden_size: 256
+  vision_model: Conv4
+  max_sequence_length: 10
+
