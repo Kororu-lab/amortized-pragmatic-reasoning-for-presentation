@@ -617,5 +617,5 @@ class Listener(nn.Module):
             lang_bilinear = self.bilinear(lang_emb)
 
             # Compute dot products
-            scores = F.softmax(torch.einsum('ijh,ih->ij', (feats_emb, lang_bilinear)))
+            scores = F.softmax(torch.einsum('ijh,ih->ij', (feats_emb, lang_bilinear)), dim=1)
         return scores

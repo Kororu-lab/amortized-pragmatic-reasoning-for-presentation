@@ -134,7 +134,7 @@ class Ellipse(Shape):
         self.shape = shape
 
         #  self.coords = [int(x) for x in self.shape.bounds]
-        self.coords = np.round(np.array(self.shape.boundary).astype(np.int))
+        self.coords = np.round(np.array(self.shape.boundary.coords).astype(int))
         #  print(len(np.array(self.shape.convex_hull)))
         #  print(len(np.array(self.shape.convex_hull.boundary)))
         #  print(len(np.array(self.shape.exterior)))
@@ -172,7 +172,7 @@ class Rectangle(Shape):
         # Get coords
         self.coords = np.round(
             np.array(self.shape.exterior.coords)[:-1].flatten()).astype(
-                np.int).tolist()
+                int).tolist()
 
     def draw(self, image):
         image.draw.polygon(self.coords, BRUSHES[self.color], PENS[self.color])
@@ -189,7 +189,7 @@ class Square(Rectangle):
         # Get coords
         self.coords = np.round(
             np.array(self.shape.exterior.coords)[:-1].flatten()).astype(
-                np.int).tolist()
+                int).tolist()
 
 
 SHAPE_IMPLS = {
@@ -676,7 +676,7 @@ def generate(n,
     if float_type:
         all_imgs = np.divide(all_imgs, TWOFIVEFIVE)
         all_labels = all_labels.astype(np.float32)
-    langs = np.array([fmt_config(c) for c in configs], dtype=np.unicode)
+    langs = np.array([fmt_config(c) for c in configs], dtype=np.unicode_)
     return {'imgs': all_imgs, 'labels': all_labels, 'langs': langs}
 
 
@@ -764,13 +764,11 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    data_dir = './data/single/reference-1000-'
-    files = [data_dir+'0.npz', data_dir+'1.npz', data_dir+'2.npz', data_dir+'3.npz', data_dir+'4.npz',data_dir+'5.npz', data_dir+'6.npz', data_dir+'7.npz', data_dir+'8.npz', data_dir+'9.npz',data_dir+'10.npz', data_dir+'11.npz', data_dir+'12.npz', data_dir+'13.npz', data_dir+'14.npz',data_dir+'15.npz', data_dir+'16.npz', data_dir+'17.npz', data_dir+'18.npz', data_dir+'19.npz',data_dir+'20.npz', data_dir+'21.npz', data_dir+'22.npz', data_dir+'23.npz', data_dir+'24.npz',data_dir+'25.npz', data_dir+'26.npz', data_dir+'27.npz', data_dir+'28.npz', data_dir+'29.npz',data_dir+'30.npz', data_dir+'31.npz', data_dir+'32.npz', data_dir+'33.npz', data_dir+'34.npz',data_dir+'35.npz', data_dir+'36.npz', data_dir+'37.npz', data_dir+'38.npz', data_dir+'39.npz',data_dir+'40.npz', data_dir+'41.npz', data_dir+'42.npz', data_dir+'43.npz', data_dir+'44.npz',data_dir+'45.npz', data_dir+'46.npz', data_dir+'47.npz', data_dir+'48.npz', data_dir+'49.npz',data_dir+'50.npz', data_dir+'51.npz', data_dir+'52.npz', data_dir+'53.npz', data_dir+'54.npz',data_dir+'70.npz', data_dir+'71.npz', data_dir+'72.npz', data_dir+'73.npz', data_dir+'74.npz']
-    for file in files:
-        data = generate(
-            args.n_examples, args.n_images, args.correct, verbose=True,
-            data_type=args.data_type,
-            img_func=IMG_FUNCS[args.img_type],
-            do_mp=not args.no_mp,
-            context=None)
-        np.savez_compressed(file, **data)
+    # Generate a single dataset file as specified by the --out argument
+    data = generate(
+        args.n_examples, args.n_images, args.correct, verbose=True,
+        data_type=args.data_type,
+        img_func=IMG_FUNCS[args.img_type],
+        do_mp=not args.no_mp,
+        context=None)
+    np.savez_compressed(args.out, **data)

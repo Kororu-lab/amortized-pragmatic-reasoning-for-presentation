@@ -85,8 +85,7 @@ def ensure_shapeworld_data_exists(dataset_config, generalization=None):
     else:
         data_dir = Path('./data/shapeworld')
         # Generate all files needed for training: 0-74 (skipping 55-69)
-        file_indices = list(range(75))
-        file_indices = [i for i in file_indices if not (55 <= i < 70)]
+        file_indices = list(range(75)) # This will generate all files from 0 to 74
     
     for idx in file_indices:
         output_path = data_dir / f'reference-{n_examples}-{idx}.npz'
@@ -324,7 +323,7 @@ if __name__ == '__main__':
         Path(vocab_path).parent.mkdir(parents=True, exist_ok=True)
         torch.save(vocab, vocab_path)
         logger.info(f"Vocabulary saved to {vocab_path}")
-        return  # Exit after generating vocab
+        sys.exit(0)  # Exit after generating vocab
     else:
         vocab = ensure_vocab_exists(args, pretrain_data)
     

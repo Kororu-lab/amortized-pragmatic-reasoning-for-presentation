@@ -111,7 +111,7 @@ def load_raw_data(data_file: str) -> Dict[str, np.ndarray]:
     try:
         if data['langs'].dtype.kind in ('U', 'S', 'O'):  # Unicode, byte string, or object
             # Tokenize string data
-            langs = np.array([t.lower().split() for t in data['langs']])
+            langs = np.array([t.lower().split() for t in data['langs']], dtype=object)
             logger.debug("Tokenized language data from strings")
         else:
             # Already tokenized
@@ -172,8 +172,8 @@ class ShapeWorld:
 
     def to_idx(self, langs):
         # Add SOS, EOS
-        lang_len = np.array([len(t) for t in langs], dtype=np.int) + 2
-        lang_idx = np.full((len(self), max(lang_len)), self.w2i[PAD_TOKEN], dtype=np.int)
+        lang_len = np.array([len(t) for t in langs], dtype=int) + 2
+        lang_idx = np.full((len(self), max(lang_len)), self.w2i[PAD_TOKEN], dtype=int)
         for i, toks in enumerate(langs):
             lang_idx[i, 0] = self.w2i[SOS_TOKEN]
             for j, tok in enumerate(toks, start=1):

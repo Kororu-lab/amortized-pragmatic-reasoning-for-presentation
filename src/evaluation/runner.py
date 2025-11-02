@@ -30,8 +30,9 @@ def compute_average_metrics(meters):
 
 def _collect_outputs(meters, outputs, vocab, img, y, lang, lang_length, lis_pred, lis_scores, this_loss, this_acc, batch_size, ci_listeners, language_model, times):
     seq_prob = []
-    for i,prob in enumerate(language_model.probability(lang,lang_length).cpu().numpy()):
-        seq_prob.append(np.exp(prob))
+    if language_model:
+        for i,prob in enumerate(language_model.probability(lang,lang_length).cpu().numpy()):
+            seq_prob.append(np.exp(prob))
         
     if ci_listeners != None:
         ci = []
@@ -46,7 +47,8 @@ def _collect_outputs(meters, outputs, vocab, img, y, lang, lang_length, lis_pred
     outputs['score'].append(lis_scores)
     meters['loss'].append(this_loss.cpu().numpy())
     meters['acc'].append(this_acc)
-    meters['prob'].append(seq_prob)
+    if language_model:
+        meters['prob'].append(seq_prob)
     if ci_listeners != None:
         meters['ci_acc'].append(ci)
     meters['length'].append(lang_length.cpu().numpy()-2)
@@ -120,12 +122,19 @@ def run(data_file, split, model_type, speaker, listener, optimizer, loss, vocab,
         else:
             internal_listener = torch.load(f'./experiments/saved_models/{dataset}/{generalization}_literal_listener_0.pt')
     
-    language_model = torch.load(f'./experiments/saved_models/{dataset}/language_model.pt')
-
+    # Load language model if it exists, otherwise set to None
+    try:
+        language_model = torch.load(f'./experiments/saved_models/{dataset}/language_model.pt')
+    except FileNotFoundError:
+        language_model = None
+        if model_type not in ['l0', 's0']:
+            print(f"Warning: Language model not found at ./experiments/saved_models/{dataset}/language_model.pt. Some metrics may not be available.")
+    
     if split == 'train':
-        for param in language_model.parameters():
-            param.requires_grad = False
-        language_model.train()
+        if language_model:
+            for param in language_model.parameters():
+                param.requires_grad = False
+            language_model.train()
         if model_type == 's0' or model_type == 'language_model':
             speaker.train()
         elif model_type == 'l0':
@@ -138,7 +147,8 @@ def run(data_file, split, model_type, speaker, listener, optimizer, loss, vocab,
             listener.train()
         context = contextlib.suppress()
     else:
-        language_model.eval()
+        if language_model:
+            language_model.eval()
         if model_type != 'l0' and model_type != 'oracle' and model_type != 'test':
             speaker.eval()
         if model_type != 's0' and model_type != 'language_model':
@@ -183,7 +193,7 @@ def run(data_file, split, model_type, speaker, listener, optimizer, loss, vocab,
                     outputs['gt_lang'].append(gt_lang)
                 if model_type == 's0' or model_type == 'l0' or model_type == 'language_model' or model_type == 'oracle':
                     max_len = 40
-                    length = torch.tensor([np.count_nonzero(t) for t in lang.cpu()], dtype=np.int)
+                    length = torch.tensor([np.count_nonzero(t) for t in lang.cpu()], dtype=int)
                     lang[lang>=len(vocab['w2i'].keys())] = 3
                     lang = F.one_hot(lang, num_classes = len(vocab['w2i'].keys()))
                     lang = F.pad(lang,(0,0,0,max_len-lang.shape[1])).float()
@@ -236,12 +246,12 @@ def run(data_file, split, model_type, speaker, listener, optimizer, loss, vocab,
                         for shape in [7, 8, 12, 13, 5, 0]:
                             if color == 0:
                                 if shape != 0:
-                                    lang, lang_length = _generate_utterance(shape, None, batch_size, max_len)
+                                    lang, lang_length = _generate_utterance(shape, None, batch_size, max_len, vocab, device=img.device)
                             elif shape == 0:
-                                lang, lang_length = _generate_utterance(color, None, batch_size, max_len)
+                                lang, lang_length = _generate_utterance(color, None, batch_size, max_len, vocab, device=img.device)
                             else:
-                                lang0, lang_length0 = _generate_utterance(color, shape, batch_size, max_len)
-                                lang1, lang_length1 = _generate_utterance(shape, color, batch_size, max_len)       
+                                lang0, lang_length0 = _generate_utterance(color, shape, batch_size, max_len, vocab, device=img.device)
+                                lang1, lang_length1 = _generate_utterance(shape, color, batch_size, max_len, vocab, device=img.device)       
                                 lang = torch.cat((lang0.unsqueeze(0), lang1.unsqueeze(0)), 0)
                                 lang_length = torch.cat((lang_length0.unsqueeze(0), lang_length1.unsqueeze(0)), 0)
                             try:
@@ -261,13 +271,13 @@ def run(data_file, split, model_type, speaker, listener, optimizer, loss, vocab,
                         color = lang[i,1]
                         shape = lang[i,2]
                         if test_type == 'color':
-                            langs, lang_lengths = _generate_utterance(color, None, batch_size, max_len)
+                            langs, lang_lengths = _generate_utterance(color, None, batch_size, max_len, vocab, device=img.device)
                         elif test_type == 'shape':
-                            langs, lang_lengths = _generate_utterance(shape, None, batch_size, max_len)
+                            langs, lang_lengths = _generate_utterance(shape, None, batch_size, max_len, vocab, device=img.device)
                         elif test_type == 'color-shape':
-                            langs, lang_lengths = _generate_utterance(color, shape, batch_size, max_len)
+                            langs, lang_lengths = _generate_utterance(color, shape, batch_size, max_len, vocab, device=img.device)
                         else:
-                            langs, lang_lengths = _generate_utterance(shape, color, batch_size, max_len)
+                            langs, lang_lengths = _generate_utterance(shape, color, batch_size, max_len, vocab, device=img.device)
                     langs = langs.unsqueeze(0)
                     lang_lengths = lang_lengths.unsqueeze(0)
                 elif model_type == 'oracle':
@@ -282,12 +292,12 @@ def run(data_file, split, model_type, speaker, listener, optimizer, loss, vocab,
                     this_acc = (lis_pred == y).float().mean().item()
                     
                     if split == 'train':
-                        # SGD step
                         this_loss.backward()
                         optimizer.step()
                        
                     meters['loss'].update(this_loss, batch_size)
                     meters['acc'].update(this_acc, batch_size)
+
                 elif model_type == 's0' or model_type == 'language_model':
                     lang_out = lang_out[:, :-1].contiguous()
                     lang = lang[:, 1:].contiguous()
@@ -296,132 +306,121 @@ def run(data_file, split, model_type, speaker, listener, optimizer, loss, vocab,
                     this_loss = loss(lang_out.cuda(), torch.max(lang, 1)[1].cuda())
 
                     if split == 'train':
-                        # SGD step
                         this_loss.backward()
                         optimizer.step()
                         
-                    this_acc = (lang_out.argmax(1)==lang.argmax(1)).float().mean().item()
-
+                    this_acc = (lang_out.argmax(1) == torch.max(lang, 1)[1]).float().mean().item()
                     meters['loss'].update(this_loss, batch_size)
                     meters['acc'].update(this_acc, batch_size)
-                else:
-                    if model_type == 'sample' or model_type == 'rsa' or model_type == 'test':
-                        if not (model_type == 'sample' and num_samples == 1):
-                            if model_type == 'sample':
-                                alpha = 1
-                            elif model_type == 'rsa':
-                                alpha = 0.0001
-                            else:
-                                alpha = 0
-                    if model_type != 'test':
-                        best_score_diff = -math.inf * torch.ones(batch_size)
-                        best_lang = torch.zeros((langs.shape[1], langs.shape[2], langs.shape[3]))
-                        best_lang_length = torch.zeros(lang_lengths.shape[1])
-                        for lang, lang_length in zip(langs, lang_lengths):
-                            lis_scores = internal_listener(img, lang, lang_length)
-                            score_diff = (lis_scores[:, 0].cpu() - np.delete(lis_scores.cpu(), y.cpu(), axis=1).mean(axis=1))
-                            for game in range(batch_size):
-                                score_diff[game] = (score_diff[game] - alpha * lang_length[game]).cpu()
-                                if score_diff[game] > best_score_diff[game]:
-                                    best_score_diff[game] = score_diff[game]
-                                    best_lang[game] = lang[game]
-                                    best_lang_length[game] = lang_length[game]
 
-                        lang = best_lang
-                        lang_length = best_lang_length
-                            else:
-                                lang = langs.squeeze()
-                                lang_length = lang_lengths.squeeze()
-                        end = time.time()
-                        lis_scores = listener(img, lang, lang_length)
-                        
-                        # Evaluate loss and accuracy
-                        lis_pred = lis_scores.argmax(1)
-                        correct = (lis_pred == y)
-                        this_acc = correct.float().mean().item()
-                        this_loss = loss(lis_scores.cuda(), y.long())
-                        this_acc = correct.float().mean().item()
-                                
-                        if split == 'train':
-                            # SGD step
-                            this_loss.backward()
-                            optimizer.step()
-                        if split == 'test':
-                            meters, outputs = _collect_outputs(meters, outputs, vocab, img, y, lang, lang_length, lis_pred, lis_scores, this_loss, this_acc, batch_size, ci_listeners, language_model, (end-start))
+                elif model_type == 'sample' or model_type == 'rsa' or model_type == 'test':
+                    if not (model_type == 'sample' and num_samples == 1):
+                        if model_type == 'sample':
+                            alpha = 1
+                        elif model_type == 'rsa':
+                            alpha = 0.0001
                         else:
-                            meters['loss'].update(this_loss, batch_size)
-                            meters['acc'].update(this_acc, batch_size)
+                            alpha = 0
+                    
+                    best_score_diff = -math.inf * torch.ones(batch_size)
+                    best_lang = torch.zeros_like(langs[0])
+                    best_lang_length = torch.zeros_like(lang_lengths[0])
+                    for lang_candidate, lang_length_candidate in zip(langs, lang_lengths):
+                        with torch.no_grad():
+                            lis_scores = internal_listener(img, lang_candidate, lang_length_candidate)
+                        score_diff = (lis_scores[:, 0].cpu() - np.delete(lis_scores.cpu(), y.cpu(), axis=1).mean(axis=1))
+                        for game in range(batch_size):
+                            score_diff[game] = (score_diff[game] - alpha * lang_length_candidate[game]).cpu()
+                            if score_diff[game] > best_score_diff[game]:
+                                best_score_diff[game] = score_diff[game]
+                                best_lang[game] = lang_candidate[game].clone()
+                                best_lang_length[game] = lang_length_candidate[game].clone()
+                    
+                    lang = best_lang
+                    lang_length = best_lang_length
+                    end = time.time()
+                    lis_scores = listener(img, lang, lang_length)
+                    
+                    lis_pred = lis_scores.argmax(1)
+                    correct = (lis_pred == y)
+                    this_acc = correct.float().mean().item()
+                    this_loss = loss(lis_scores.cuda(), y.long())
+                    
+                    if split == 'train':
+                        this_loss.backward()
+                        optimizer.step()
+                    if split == 'test':
+                        meters, outputs = _collect_outputs(meters, outputs, vocab, img, y, lang, lang_length, lis_pred, lis_scores, this_loss, this_acc, batch_size, ci_listeners, language_model, (end - start))
                     else:
-                        if split == 'train' and model_type == 'amortized' and activation == 'multinomial':  # Reinforce
-                            end = time.time()
-                            lis_scores = listener(img, lang, lang_length, average=False)
-                        elif split == 'train' and model_type == 'amortized' and activation != 'gumbel' and activation is not None:
-                            end = time.time()
-                            lis_scores = listener(img, lang, lang_length, average=True)
-                        else:
+                        meters['loss'].update(this_loss, batch_size)
+                        meters['acc'].update(this_acc, batch_size)
+                
+                elif model_type == 'amortized' or model_type == 'oracle':
+                    if split == 'train' and model_type == 'amortized' and activation == 'multinomial':  # Reinforce
+                        end = time.time()
+                        lis_scores = listener(img, lang, lang_length, average=False)
+                    elif split == 'train' and model_type == 'amortized' and activation != 'gumbel' and activation is not None:
+                        end = time.time()
+                        lis_scores = listener(img, lang, lang_length, average=True)
+                    else:
+                        if model_type == 'amortized':
                             lang_onehot = lang.argmax(2)
                             if activation != 'gumbel' and activation is not None:
                                 lang = F.one_hot(lang_onehot, num_classes=len(vocab['w2i'].keys())).cuda().float()
-                            lang_length = []
-                            for seq in lang_onehot: 
-                                lang_length.append(np.where(seq.cpu() == EOS_IDX)[0][0] + 1)
-                            lang_length = torch.tensor(lang_length).cuda()
-                            end = time.time()
-                            lis_scores = listener(img, lang, lang_length)
                             
-                        # Evaluate loss and accuracy
-                        if model_type == 'l0':
-                            this_loss = loss(lis_scores, y.long())
-                        elif model_type == 'amortized':
-                            if activation == 'multinomial':
-                                # Compute policy loss - sample from listener
-                                # DETERMINISTIC REWARD
-                                #  lis_choices = lis_scores.argmax(1)  # deterministically choose best
-                                # STOCHASTIC REWARD
-                                lis_choices = torch.distributions.Categorical(probs=lis_scores).sample()
-                                returns = lis_choices == y
-                                # No reward for saying nothing
-                                not_zero = lang_length > 2
-                                returns = (returns & not_zero).float()
-                                # Length penalty - less returns
-                                # In the amortized model, we don't penalize
-                                # SOS, so the true length that we penalize
-                                # is lang_length - 1.
-                                LENGTH_PENALTY = 0.01
-                                returns = returns - LENGTH_PENALTY * (lang_length.to(returns.device).float() - 1)
-                                returns = torch.clamp(returns, 0.0, 1.0)
-                                # Slight negative reward for getting things wrong
-                                # (TODO: tweak this)
-                                #  returns = (1 * returns) + (-0.1 * (1 - returns))
-                                # FIXME: Should we normalize in the binary case?
-                                policy_loss = (-lang_prob * returns).mean()
-                                this_loss = policy_loss
-                            else:
-                                this_loss = loss(lis_scores,y.long())
-                            this_loss = this_loss + eos_loss * float(lmbd)
+                            new_lang_length = []
+                            for seq in lang_onehot.cpu():
+                                eos_indices = (seq == EOS_IDX).nonzero(as_tuple=True)[0]
+                                if len(eos_indices) > 0:
+                                    new_lang_length.append(eos_indices[0].item() + 1)
+                                else:
+                                    new_lang_length.append(len(seq)) # Fallback if no EOS
+                            lang_length = torch.tensor(new_lang_length, device=lang.device)
+                        end = time.time()
+                        lis_scores = listener(img, lang, lang_length)
+                        
+                    # Evaluate loss and accuracy
+                    if model_type == 'amortized':
+                        if activation == 'multinomial':
+                            # REINFORCE
+                            lis_choices = torch.distributions.Categorical(probs=lis_scores).sample()
+                            returns = (lis_choices == y).float()
+                            not_empty = lang_length > 2
+                            returns = (returns * not_empty.float())
+                            LENGTH_PENALTY = 0.01
+                            returns = returns - LENGTH_PENALTY * (lang_length.to(returns.device).float() - 1)
+                            returns = torch.clamp(returns, 0.0, 1.0)
+                            policy_loss = (-lang_prob * returns).mean()
+                            this_loss = policy_loss
                         else:
                             this_loss = loss(lis_scores, y.long())
-                            
-                        lis_pred = lis_scores.argmax(1)
-                        correct = (lis_pred == y)
-                        this_acc = correct.float().mean().item()
+                        this_loss = this_loss + eos_loss * float(lmbd)
+                    else: # oracle
+                        this_loss = loss(lis_scores, y.long())
                         
-                        if split == 'train':
-                            # SGD step
-                            this_loss.backward()
-                            optimizer.step()
-                        
-                        if split == 'test':
-                            meters, outputs = _collect_outputs(meters, outputs, vocab, img, y, lang, lang_length, lis_pred, lis_scores, this_loss, this_acc, batch_size, ci_listeners, language_model, (end-start))
-                        else:
-                            meters['loss'].update(this_loss-eos_loss*float(lmbd), batch_size)
-                            meters['lm loss'].update(eos_loss*float(lmbd), batch_size)
-                            meters['acc'].update(this_acc, batch_size)
+                    lis_pred = lis_scores.argmax(1)
+                    correct = (lis_pred == y)
+                    this_acc = correct.float().mean().item()
+                    
+                    if split == 'train':
+                        this_loss.backward()
+                        optimizer.step()
+                    
+                    if split == 'test':
+                        meters, outputs = _collect_outputs(meters, outputs, vocab, img, y, lang, lang_length, lis_pred, lis_scores, this_loss, this_acc, batch_size, ci_listeners, language_model, (end - start))
+                    else:
+                        if model_type == 'amortized':
+                            meters['loss'].update(this_loss - eos_loss * float(lmbd), batch_size)
+                            meters['lm loss'].update(eos_loss * float(lmbd), batch_size)
                             meters['length'].update(lang_length.float().mean(), batch_size)
+                        else: # l0
+                            meters['loss'].update(this_loss, batch_size)
+                        meters['acc'].update(this_acc, batch_size)
         
     if split == 'test':
         meters['loss'] = np.array(meters['loss']).tolist()
-        meters['prob'] = [prob for sublist in meters['prob'] for prob in sublist]
+        if language_model:
+            meters['prob'] = [prob for sublist in meters['prob'] for prob in sublist]
         meters['length'] = [length for sublist in meters['length'] for length in sublist]
         meters['colors'] = [color for sublist in meters['colors'] for color in sublist]
         meters['shapes'] = [shape for sublist in meters['shapes'] for shape in sublist]
