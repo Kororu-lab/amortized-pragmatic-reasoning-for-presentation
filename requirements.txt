@@ -1,6 +1,7 @@
 # Core dependencies
-torch==2.2.0
-torchvision==0.17.0
+torch==1.7.1
+torchvision==0.8.2
+torchaudio==0.7.2
 numpy==1.26.4
 pandas==2.2.2
 pyyaml==6.0.1
